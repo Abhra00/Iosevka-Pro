@@ -9,54 +9,57 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
-    name: Build ${{ matrix.plan }}
+  build-ttf:
+    name: Build ${{ matrix.fontFamily }} (TTF)
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        plan:
+        fontFamily:
           - IosevkaProMono
           - IosevkaProSans
           - IosevkaProSerif
 
     steps:
-      - name: Checkout your repo
-        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
 
-      - name: Checkout Iosevka source
+      - name: Install ttfautohint
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ttfautohint
+
+      - name: Checkout Customization Repository
+        uses: actions/checkout@v4
+        with:
+          path: customization
+
+      - name: Checkout Iosevka Repository
         uses: actions/checkout@v4
         with:
           repository: be5invis/Iosevka
-          ref: main
-          path: Iosevka
+          path: iosevka
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: "lts/*"
-          cache: "npm"
-          cache-dependency-path: Iosevka/package-lock.json
+      - name: Copy Custom Build Plans
+        shell: bash
+        run: |
+          cp customization/private-build-plans.toml iosevka/private-build-plans.toml
 
-      - name: Install ttfautohint
-        run: sudo apt-get install -y ttfautohint
+      - name: Build ${{ matrix.fontFamily }}
+        shell: bash
+        working-directory: iosevka
+        run: |
+          npm ci
+          npm run build -- ttf::${{ matrix.fontFamily }}
 
-      - name: Install Iosevka build dependencies
-        working-directory: Iosevka
-        run: npm ci
-
-      - name: Copy build plan into Iosevka source
-        run: cp private-build-plans.toml Iosevka/private-build-plans.toml
-
-      - name: Build ${{ matrix.plan }} (TTF only)
-        working-directory: Iosevka
-        run: npm run build -- ttf::${{ matrix.plan }}
-
-      - name: Upload ${{ matrix.plan }} artifacts
+      - name: Upload Font Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.plan }}
-          path: Iosevka/dist/${{ matrix.plan }}/TTF/
+          name: ${{ matrix.fontFamily }}-ttf
+          path: iosevka/dist/${{ matrix.fontFamily }}/TTF/
           if-no-files-found: error
           retention-days: 30
